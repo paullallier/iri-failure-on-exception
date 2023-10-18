@@ -67,11 +67,16 @@ final class ErrorListener extends SymfonyErrorListener
     protected function duplicateRequest(\Throwable $exception, Request $request): Request
     {
         $dup = parent::duplicateRequest($exception, $request);
+
         $apiOperation = $this->initializeOperation($request);
+
+        if ($this->debug) {
+            $this->logger?->error('An exception occured, transforming to an Error resource.', ['exception' => $exception, 'operation' => $apiOperation]);
+        }
+
         $format = $this->getRequestFormat($request, $this->errorFormats, false);
 
         if ($this->resourceMetadataCollectionFactory) {
-
             if ($this->resourceClassResolver?->isResourceClass($exception::class)) {
                 $resourceCollection = $this->resourceMetadataCollectionFactory->create($exception::class);
 
@@ -110,7 +115,6 @@ final class ErrorListener extends SymfonyErrorListener
                 $errorResource = Error::createFromException($exception, $statusCode);
             }
         } else {
-
             /** @var HttpOperation $operation */
             $operation = new ErrorOperation(name: '_api_errors_problem', class: Error::class, outputFormats: ['jsonld' => ['application/problem+json']], normalizationContext: ['groups' => ['jsonld'], 'skip_null_values' => true]);
             $operation = $operation->withStatus($this->getStatusCode($apiOperation, $request, $operation, $exception));
@@ -150,7 +154,7 @@ final class ErrorListener extends SymfonyErrorListener
         $dup->attributes->set('_api_previous_operation', $apiOperation);
         $dup->attributes->set('_api_operation', $operation);
         $dup->attributes->set('_api_operation_name', $operation->getName());
-        $dup->attributes->remove('exception');
+        $dup->attributes->set('exception', $errorResource);
         // These are for swagger
         $dup->attributes->set('_api_original_route', $request->attributes->get('_route'));
         $dup->attributes->set('_api_original_route_params', $request->attributes->get('_route_params'));
